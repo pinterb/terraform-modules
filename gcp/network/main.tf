@@ -1,0 +1,86 @@
+# ------------------------------------------------------------------------------
+# GOOGLE CLOUD PROJECT
+# ------------------------------------------------------------------------------
+
+resource "google_project_service" "services" {
+  count = "${length(var.project_services)}"
+
+  disable_on_destroy = false
+
+  service = "${element(var.project_services, count.index)}"
+
+  provisioner "local-exec" {
+    command = "sleep 60"
+  }
+}
+
+# ------------------------------------------------------------------------------
+# VPC NETWORK, SUBNETS, FIREWALL RULES
+# ------------------------------------------------------------------------------
+
+resource "google_compute_network" "network" {
+  depends_on = ["google_project_service.services"]
+
+  name                    = "network"
+  auto_create_subnetworks = false
+}
+
+resource "google_compute_subnetwork" "subnets" {
+  count = "${length(var.cluster_subnets)}"
+
+  name    = "${element(keys(var.cluster_subnets), count.index)}"
+  network = "${google_compute_network.network.self_link}"
+
+  ip_cidr_range    = "${lookup(var.cluster_subnet_ranges, element(keys(var.cluster_subnets), count.index))}"
+
+  region = "${element(split(",",lookup(var.cluster_subnets, count.index)), 0)}"
+
+  private_ip_google_access = true
+
+  secondary_ip_range = [
+    {
+      range_name = "pods"
+
+      ip_cidr_range = "${element(split(",", lookup(var.cluster_subnets, count.index)), 2)}"
+    },
+    {
+      range_name = "services"
+
+      ip_cidr_range = "${element(split(",",
+                                                                lookup(var.cluster_subnets,
+                                                                count.index)),
+                                                                3)}"
+    },
+  ]
+}
+
+# ------------------------------------------------------------------------------
+# DNS ZONES AND RECORDS
+# ------------------------------------------------------------------------------
+
+resource "google_dns_managed_zone" "dns_zones" {
+  count      = "${length(var.dns_zones) > 0 ? length(var.dns_zones) : 0}"
+  depends_on = ["google_project_service.services"]
+
+  name     = "${element(keys(var.dns_zones), count.index)}"
+  dns_name = "${element(values(var.dns_zones), count.index)}"
+}
+
+resource "google_dns_record_set" "dns_records" {
+  depends_on = ["google_dns_managed_zone.dns_zones"]
+
+  count = "${length(var.dns_zones) > 0 &&
+              length(var.dns_records) > 0 && var.create_static_ip_address
+              ? length(var.dns_records) : 0}"
+
+  type = "A"
+  ttl  = 3600
+
+  managed_zone = "${element(keys(var.dns_records),
+                    count.index)}"
+
+  name = "${element(values(var.dns_records),
+                      count.index)}"
+
+  rrdatas = ["${google_compute_address.ingress_controller_ip.0.address}"]
+}
