@@ -4,7 +4,7 @@
 
 variable "project_services" {
   type        = "list"
-  description = "Google Cloud APIs to enable for the GCP project"
+  description = "Google Cloud APIs to enable for the GCP project."
 
   default = [
     "compute.googleapis.com",
@@ -17,9 +17,22 @@ variable "project_services" {
   ]
 }
 
+# ------------------------------------------------------------------------------
+# SUBNET VARIABLES
+# ------------------------------------------------------------------------------
+
+variable "cluster_subnets" {
+  type        = "map"
+  description = "A map of subnet names to their list of secondary ip range names."
+
+  default = {
+    "nodes" = "pods,services"
+  }
+}
+
 variable "cluster_subnet_ranges" {
   type        = "map"
-  description = "A map of index to a comma separated list of `region,nodes-subnet,pods-subnet,services-subnet` string. Designed for GKE, but generic enough for other use cases."
+  description = "A map of names to cidr ranges. In the context of GCP, these named ranges are applicable to both subnets and their secondary ip ranges. IOW, the names could represent either a subnet or one of its secondary ip ranges (see cluster_subnets)"
 
   #default = {
   #  # index = "region,nodes-subnet,pods-subnet,services-subnet"
@@ -34,18 +47,18 @@ variable "cluster_subnet_ranges" {
   }
 }
 
-variable "cluster_subnets" {
+variable "cluster_subnet_regions" {
   type        = "map"
-  description = "A map of index to a comma separated list of `subnet name,secondary ip range[0],secondary ip range[1]` string. Designed for GKE, but generic enough for other use cases."
+  description = "A map of names to GCP regions where they will be located."
 
   default = {
-    "nodes" = "pods,services"
+    "nodes" = "us-central1"
   }
 }
 
 variable "create_static_ip_address" {
   default     = false
-  description = "Create / reserve a regional external static IP address for the network"
+  description = "Create / reserve a regional external static IP address for the network."
 }
 
 variable "static_ip_region" {
@@ -54,14 +67,14 @@ variable "static_ip_region" {
 
 variable "dns_zones" {
   type        = "map"
-  description = "Add DNS zones that will be used for this environment"
+  description = "Add DNS zones that will be used for this environment."
 
   # Example: {"prod-internal-zone" = "prod.cdw-skunk.works."}
   default = {}
 }
 
 variable "dns_records" {
-  description = "Add DNS A-records pointing to our static IP address"
+  description = "Add DNS A-records pointing to our static IP address."
   type        = "map"
 
   # Example: {"prod-internal-zone" = "*.prod.cdw-skunk.works."}

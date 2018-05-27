@@ -28,30 +28,60 @@ resource "google_compute_network" "network" {
 resource "google_compute_subnetwork" "subnets" {
   count = "${length(var.cluster_subnets)}"
 
-  name    = "${element(keys(var.cluster_subnets), count.index)}"
+  # element(list, index) - Returns a single element from a list at the given
+  # index. If the index is greater than the number of elements, this function
+  # will wrap using a standard mod algorithm. This function only works on flat
+  # lists.
+  #
+  # keys(map) - Returns a lexically sorted list of map keys.
+  name = "${element(keys(var.cluster_subnets), count.index)}"
+
   network = "${google_compute_network.network.self_link}"
 
-  ip_cidr_range    = "${lookup(var.cluster_subnet_ranges, element(keys(var.cluster_subnets), count.index))}"
+  # lookup(map, key, [default]) - Performs a dynamic lookup into a map
+  # variable. The map parameter should be another variable, such as var.amis.
+  # If key does not exist in map, the interpolation will fail unless you
+  # specify a third argument, default, which should be a string value to return
+  # if no key is found in map. This function only works on flat maps and will
+  # return an error for maps that include nested lists or maps.
+  ip_cidr_range = "${lookup(var.cluster_subnet_ranges, element(keys(var.cluster_subnets), count.index))}"
 
-  region = "${element(split(",",lookup(var.cluster_subnets, count.index)), 0)}"
+  # split(delim, string) - Splits the string previously created by join back
+  # into a list. This is useful for pushing lists through module outputs since
+  # they currently only support string values. Depending on the use, the string
+  # this is being performed within may need to be wrapped in brackets to
+  # indicate that the output is actually a list, e.g. a_resource_param
+  # = ["${split(",", var.CSV_STRING)}"]. Example: split(",",
+  # module.amod.server_ids)
+  region = "${lookup(var.cluster_subnet_regions, element(keys(var.cluster_subnets), count.index))}"
 
   private_ip_google_access = true
 
   secondary_ip_range = [
     {
-      range_name = "pods"
+      range_name = "${element(split(",", lookup(var.cluster_subnets, element(keys(var.cluster_subnets), count.index))), 0)}"
 
-      ip_cidr_range = "${element(split(",", lookup(var.cluster_subnets, count.index)), 2)}"
+      ip_cidr_range = "${lookup(var.cluster_subnet_ranges, element(split(",", lookup(var.cluster_subnets, element(keys(var.cluster_subnets), count.index))), 0)  )}"
     },
     {
-      range_name = "services"
+      range_name = "${element(split(",", lookup(var.cluster_subnets, element(keys(var.cluster_subnets), count.index))), 1)}"
 
-      ip_cidr_range = "${element(split(",",
-                                                                lookup(var.cluster_subnets,
-                                                                count.index)),
-                                                                3)}"
+      ip_cidr_range = "${lookup(var.cluster_subnet_ranges, element(split(",", lookup(var.cluster_subnets, element(keys(var.cluster_subnets), count.index))), 1)  )}"
     },
   ]
+}
+
+# ------------------------------------------------------------------------------
+# EXTERNAL IP ADDRESS
+# ------------------------------------------------------------------------------
+
+resource "google_compute_address" "ingress_controller_ip" {
+  count      = "${var.create_static_ip_address ? 1 : 0}"
+  depends_on = ["google_project_service.services"]
+
+  name         = "ingress-controller-ip"
+  region       = "${var.static_ip_region}"
+  address_type = "EXTERNAL"
 }
 
 # ------------------------------------------------------------------------------
